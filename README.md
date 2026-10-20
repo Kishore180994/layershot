@@ -10,7 +10,7 @@ in whatever layer of the stack, so you keep working.
 ```
 > layershot list
   0 FG  WindowsTerminal.exe      my terminal              <- you, working
-  1     electron.exe             HoloTrade                <- covered
+  1     Spotify.exe              Spotify Premium          <- covered
   2 MIN Obsidian.exe             Graph view - vault       <- minimized
 > layershot shot 2 -o obsidian.png
 saved obsidian.png  1024x768  layer 2  Graph view - vault
@@ -27,17 +27,27 @@ Your terminal stays in front and keeps keyboard focus the whole time.
 | Chromium / Electron apps (Chrome, VS Code, Obsidian, Discord…) | These stop painting while fully covered, so layershot forces a repaint and retries until the image isn't blank (up to 3 s). |
 
 It's pure `ctypes` + Pillow: no native build and no admin rights.
+The full technical notes (the exact Win32 calls, measurements, the Chromium blank-frame
+issue, and what can't be captured) are in **[docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md)**.
 
 ## Install
 
+Requires Windows 10 1809+ and Python 3.10+.
+
 ```bash
-pip install layershot          # or: uvx layershot ...
+pip install git+https://github.com/Kishore180994/layershot
 ```
 
-From source:
+Or run it without installing, using [uv](https://docs.astral.sh/uv/):
 
 ```bash
-git clone <this repo> && cd layershot && pip install -e .
+uvx --from git+https://github.com/Kishore180994/layershot layershot list
+```
+
+From a clone:
+
+```bash
+git clone https://github.com/Kishore180994/layershot && cd layershot && pip install -e .
 ```
 
 ## Use it from an AI agent (MCP)
@@ -45,8 +55,9 @@ git clone <this repo> && cd layershot && pip install -e .
 **Claude Code**
 
 ```bash
-claude mcp add layershot -- layershot-mcp
-# or without installing: claude mcp add layershot -- uvx --from layershot layershot-mcp
+claude mcp add --scope user layershot -- layershot-mcp
+# or without installing anything:
+claude mcp add --scope user layershot -- uvx --from git+https://github.com/Kishore180994/layershot layershot-mcp
 ```
 
 **Claude Desktop / Cursor / any MCP client** (`mcpServers` config):
@@ -65,6 +76,18 @@ claude mcp add layershot -- layershot-mcp
 [mcp_servers.layershot]
 command = "layershot-mcp"
 ```
+
+**Hermes Agent** (`config.yaml`):
+
+```yaml
+mcp_servers:
+  layershot:
+    command: layershot-mcp
+```
+
+Tip: tell your agent in its system prompt or instructions to *use layershot instead of
+focusing a window to look at it*. Agents otherwise tend to reach for the full-screen screenshot
+tool they already know.
 
 Tools:
 
@@ -101,6 +124,17 @@ layershot serve            # MCP server on stdio (same as layershot-mcp)
 - **Other virtual desktops:** those windows are skipped by `list_windows`.
 - layershot only *looks*. Clicking and typing into background windows is a separate problem (UI Automation / window messages), planned for a later version.
 
+## Development
+
+```bash
+pip install -e .
+python tests/mcp_smoke.py      # starts the MCP server, lists windows, captures one titled "Obsidian"
+```
+
+Edit the title in `tests/mcp_smoke.py` to match a window you have open. Issues and PRs are
+welcome, especially for background *input* (see the roadmap in
+[docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md#ideas--roadmap)).
+
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE).

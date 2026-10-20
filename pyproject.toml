@@ -17,6 +17,11 @@ classifiers = [
     "Topic :: Multimedia :: Graphics :: Capture :: Screen Capture",
 ]
 
+[project.urls]
+Homepage = "https://github.com/Kishore180994/layershot"
+Documentation = "https://github.com/Kishore180994/layershot/blob/master/docs/HOW-IT-WORKS.md"
+Issues = "https://github.com/Kishore180994/layershot/issues"
+
 [project.scripts]
 layershot = "layershot.cli:main"
 layershot-mcp = "layershot.server:main"
