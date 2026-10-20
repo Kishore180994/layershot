@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Title/process matching ignores spaces and punctuation, and a title also matches the process
+  name, so "Bambu Studio" finds "plate - BambuStudio" (bambu-studio.exe). Found when a real agent's
+  first title lookup failed.
+- "No window matching" errors now list the open windows, so an agent can retry right away.
+
 ## 0.1.0 - 2026-10-20
 
 First release.

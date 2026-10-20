@@ -155,14 +155,21 @@ def find_window(target: int | str | None = None, *, layer: int | None = None,
         if not 0 <= layer < len(wins):
             raise LookupError(f"layer {layer} out of range (0..{len(wins) - 1})")
         return wins[layer]
+    # "Bambu Studio" should find "plate - BambuStudio" and bambu-studio.exe: compare without spaces/punctuation
+    t, p = _norm(title), _norm(process).removesuffix("exe")
     for w in wins:
-        if title and title.lower() not in w.title.lower():
+        if t and t not in _norm(w.title) and t not in _norm(w.process):
             continue
-        if process and process.lower() not in w.process.lower():
+        if p and p not in _norm(w.process):
             continue
-        if title or process:
+        if t or p:
             return w
-    raise LookupError(f"no window matching title={title!r} process={process!r}")
+    open_list = "; ".join(f"{w.layer}: {w.title} ({w.process})" for w in wins[:20])
+    raise LookupError(f"no window matching title={title!r} process={process!r}. Open windows: {open_list}")
+
+
+def _norm(s: str | None) -> str:
+    return "".join(ch for ch in (s or "").lower() if ch.isalnum())
 
 
 def _frame_rect(h) -> tuple[W.RECT, W.RECT]:
