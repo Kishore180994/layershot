@@ -10,15 +10,12 @@ except ImportError:  # mcp 1.x
 
 from . import core
 
-mcp = _Server(
-    "layershot",
-    instructions=(
-        "Screenshot any app window without switching to it, so the user can keep working. "
-        "Call list_windows to see windows by layer (0 = front), then screenshot_window. "
-        "Minimized windows are restored behind everything, captured and minimized again. "
-        "Never focus or activate a window just to look at it."
-    ),
-)
+from .rules import RULES
+
+# Clients that support server instructions (Claude Code, Claude Desktop, ...) put these in the model's
+# system prompt, so an agent follows the background-first rule with no setup on the user's side.
+mcp = _Server("layershot", instructions=RULES + "\nLayers: list_windows shows windows front to back; layer 0 "
+              "is the window the user is working in.")
 
 
 def _encode(img, max_width: int, fmt: str) -> Image:
@@ -64,6 +61,31 @@ def screenshot_window(
     note = (f"{win.title} ({win.process}), layer {win.layer}, {img.width}x{img.height}"
             + (", was minimized" if win.minimized else ""))
     return [note, _encode(img, max_width, "jpeg" if format.lower() in ("jpg", "jpeg") else "png")]
+
+
+@mcp.tool()
+def open_app(target: str, args: str | None = None, cwd: str | None = None, front: bool = False,
+             wait: float = 8.0) -> dict:
+    """Open an app, file, folder or URL. By default it opens IN THE BACKGROUND: the new window goes
+    behind the user's windows and focus never leaves what the user is doing.
+
+    Set front=True ONLY when the user explicitly asked to open/show it for themselves. When you
+    (the agent) just need the app for your own work, leave front=False and use
+    screenshot_window to look at it.
+    target: exe name or path ("notepad.exe", "C:/Program Files/.../app.exe"), a file or folder
+    path (opens with its default app), or a URL. args: command-line arguments.
+    """
+    from . import launch
+    return launch.open_app(target, args, cwd, front=front, wait=wait)
+
+
+@mcp.tool()
+def bring_to_front(layer: int | None = None, title: str | None = None, process: str | None = None,
+                   hwnd: int | None = None) -> dict:
+    """Restore and focus a window. ONLY use this when the user asked to see or switch to the window;
+    to look at a window yourself, use screenshot_window instead."""
+    from . import launch
+    return launch.bring_to_front(layer=layer, title=title, process=process, hwnd=hwnd).to_dict()
 
 
 def main():

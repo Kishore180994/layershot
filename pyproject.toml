@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "layershot"
-version = "0.1.0"
+version = "0.2.0"
 description = "Screenshot any Windows app window - covered or minimized - without stealing focus. CLI + MCP server for AI agents."
 readme = "README.md"
 license = "MIT"

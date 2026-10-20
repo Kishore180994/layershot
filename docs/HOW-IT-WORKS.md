@@ -135,6 +135,53 @@ restore and re-minimize the same window at once. Separate processes (e.g. two di
 running their own layershot server) don't share the lock. In the worst case one of them captures
 a window the other has just re-minimized, and the blank-retry loop handles that.
 
+## Opening apps in the background
+
+`open_app()` launches with `ShellExecuteExW` (so exe names on PATH / App Paths, full paths,
+documents, folders and URLs all work) using `nShow = SW_SHOWNOACTIVATE`. That flag is
+only a *request*: most apps call `SetForegroundWindow` during startup anyway. We measured
+mspaint.exe on Windows 11 holding the foreground for ~3.5 s after a `SW_SHOWNOACTIVATE`
+launch (344 of our 10 ms samples).
+
+What actually stops it is **`LockSetForegroundWindow(LSFW_LOCK)`**. While the lock is held,
+programs can't call `SetForegroundWindow` on themselves. *User* input (clicks, Alt+Tab) still works,
+so the user is never locked out. Only the foreground thread may take the lock, so layershot briefly
+attaches to the foreground window's input queue (`AttachThreadInput`), takes the lock, and
+detaches. The same Paint launch with the lock held: **0 samples** with focus stolen.
+
+The full sequence:
+
+1. Record the user's foreground window and the current set of app windows.
+2. Take the foreground lock (released in a `finally`, so it can't stay stuck).
+3. `ShellExecuteExW(..., SW_SHOWNOACTIVATE)`.
+4. For up to `wait` seconds (default 8), poll every 50 ms. Each new window goes to `HWND_BOTTOM`
+   without activation. If the foreground changed anyway, push the thief to the back and give
+   focus back to the user's window (`AttachThreadInput` + `SetForegroundWindow`). We stop once
+   new windows have appeared and nothing new has shown up for 1 s.
+5. Unlock, and return the new windows with their current layers.
+
+`front=True` skips the lock, launches with `SW_SHOWNORMAL` and focuses the first new window, for when
+the user asked to see the app.
+
+`bring_to_front()` restores a minimized window and focuses it. A background process normally isn't
+allowed to change the foreground, so it borrows the current foreground thread's input queue
+(`AttachThreadInput`) for the `SetForegroundWindow` call.
+
+**The policy has to reach the agent.** layershot can't know *why* an agent opens something, so the
+rule ("background unless the user asked") has to reach the model. It's defined once in
+`layershot/rules.py` and delivered three ways:
+
+1. **MCP server instructions.** Clients that support them (Claude Code, Claude Desktop…) put them in the
+   model's system prompt the moment the server connects. No user setup is needed.
+2. **Tool descriptions.** `open_app` and `bring_to_front` say when `front` is allowed.
+3. **`layershot setup`** writes the rule into the agent's own instruction file (`~/.claude/CLAUDE.md`,
+   `~/.codex/AGENTS.md`) between `layershot:begin/end` markers. That also covers sessions that started
+   before the MCP server existed, which then fall back to the `layershot` CLI.
+
+We learned why layer 3 matters the hard way: a long-running Claude Code session had written its own "bring
+the window to the front, then screenshot" helper weeks earlier, and it kept using it, because that
+session had never loaded layershot.
+
 ## Things that will not work
 
 | Case | Result |
@@ -160,6 +207,7 @@ WGC is a good backend to add later for streaming or video.
 
 ## Ideas / roadmap
 
+- ~~Open apps in the background~~: done in 0.2.0 (`open_app`).
 - **Background input:** click and type into a background window without focusing it, using
   UI Automation patterns (`InvokePattern`, `ValuePattern`) first and window messages
   (`PostMessage WM_LBUTTONDOWN/WM_CHAR`) as a fallback. That's the other half of "agents shouldn't take over
