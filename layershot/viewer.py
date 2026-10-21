@@ -40,7 +40,29 @@ SWP_NOMOVE, SWP_NOSIZE, SWP_NOACTIVATE = 0x2, 0x1, 0x10
 WM_HOTKEY, MOD = 0x312, {"alt": 1, "ctrl": 2, "control": 2, "shift": 4, "win": 8}
 MOD_NOREPEAT = 0x4000
 
-BG, BAR, FG, DIM, ACCENT = "#101418", "#1b2128", "#e6edf3", "#8b949e", "#58a6ff"
+# Pick with `layershot viewer --theme hud` (prefs "theme"), or LAYERSHOT_THEME. A dict in prefs "theme"
+# overrides single keys, e.g. {"base": "hud", "accent": "#ff9900"}.
+THEMES = {
+    "default": dict(bg="#101418", bar="#1b2128", border="#30363d", fg="#e6edf3", dim="#8b949e",
+                    accent="#58a6ff", danger="#ff7b72", cursor="#ff00c8", font="Segoe UI", mono="Consolas",
+                    caps=False, brackets=False),
+    # cyan HUD: navy glass panels, cyan hairline border, corner brackets, spaced caps headers
+    "hud": dict(bg="#030e1a", bar="#082a3a", border="#10556a", fg="#d7f6ff", dim="#6fb4c9",
+                accent="#2ad8ff", danger="#ff4d5e", cursor="#ffb547", font="Bahnschrift",
+                mono="Cascadia Mono", caps=True, brackets=True),
+}
+
+
+def _theme() -> dict:
+    p = os.environ.get("LAYERSHOT_THEME") or activity.prefs().get("theme") or "default"
+    if isinstance(p, dict):
+        return THEMES.get(p.get("base", "default"), THEMES["default"]) | {k: v for k, v in p.items() if k != "base"}
+    return THEMES.get(p, THEMES["default"])
+
+
+def _spaced(s: str) -> str:
+    """Letter-spaced caps (Tk has no letter-spacing)."""
+    return " ".join(s.upper())
 
 
 class _ThumbProps(ctypes.Structure):
@@ -71,44 +93,72 @@ class Viewer:
         dpi = user32.GetDpiForSystem() or 96
         root.tk.call("tk", "scaling", dpi / 72)
         self.px = lambda v: round(v * dpi / 96)
-        root.configure(bg=BG)
+        self.T = T = _theme()
+        cap = _spaced if T["caps"] else (lambda s: s)
+        root.configure(bg=T["border"])  # 1 px hairline border around everything
+        body = tk.Frame(root, bg=T["bg"])
+        body.pack(fill="both", expand=True, padx=1, pady=1)
 
-        bar = tk.Frame(root, bg=BAR, height=self.px(28))
+        bar = tk.Frame(body, bg=T["bar"], height=self.px(26))
         bar.pack(fill="x")
         bar.pack_propagate(False)
-        self.title = tk.Label(bar, text="layershot · AI view", bg=BAR, fg=FG, font=("Segoe UI", 9, "bold"),
-                              anchor="w")
+        dot = tk.Canvas(bar, width=self.px(18), height=self.px(26), bg=T["bar"], highlightthickness=0)
+        dot.pack(side="left", padx=(self.px(6), 0))
+        r, cy = self.px(3), self.px(13)
+        dot.create_oval(self.px(9) - r - 2, cy - r - 2, self.px(9) + r + 2, cy + r + 2, fill=T["border"], outline="")
+        dot.create_oval(self.px(9) - r, cy - r, self.px(9) + r, cy + r, fill=T["accent"], outline="")
+        self.label = tk.Label(bar, text=cap("AI view"), bg=T["bar"], fg=T["accent"],
+                              font=(T["font"], 8, "bold" if not T["caps"] else "normal"))
+        self.label.pack(side="left")
+        self.title = tk.Label(bar, text="", bg=T["bar"], fg=T["dim"], font=(T["mono"], 8), anchor="w")
         self.title.pack(side="left", fill="x", expand=True, padx=self.px(8))
-        close = tk.Label(bar, text="✕", bg=BAR, fg=DIM, font=("Segoe UI", 10), cursor="hand2", padx=self.px(8))
+        close = tk.Label(bar, text="✕", bg=T["bar"], fg=T["dim"], font=(T["font"], 10), cursor="hand2",
+                         padx=self.px(8))
         close.pack(side="right")
         close.bind("<Button-1>", lambda e: self.hide(by_user=True))
-        close.bind("<Enter>", lambda e: close.config(fg="#ff7b72"))
-        close.bind("<Leave>", lambda e: close.config(fg=DIM))
-        front = tk.Label(bar, text="Bring forward", bg=BAR, fg=ACCENT, font=("Segoe UI", 9),
+        close.bind("<Enter>", lambda e: close.config(fg=T["danger"]))
+        close.bind("<Leave>", lambda e: close.config(fg=T["dim"]))
+        front = tk.Label(bar, text=cap("Bring forward"), bg=T["bar"], fg=T["accent"], font=(T["font"], 8),
                          cursor="hand2", padx=self.px(6))
         front.pack(side="right")
         front.bind("<Button-1>", lambda e: self.bring_forward())
-        front.bind("<Enter>", lambda e: front.config(fg=FG))
-        front.bind("<Leave>", lambda e: front.config(fg=ACCENT))
-        for w in (bar, self.title):
+        front.bind("<Enter>", lambda e: front.config(fg=T["fg"]))
+        front.bind("<Leave>", lambda e: front.config(fg=T["accent"]))
+        for w in (bar, self.label, self.title, dot):
             w.bind("<Button-1>", self._drag_start)
             w.bind("<B1-Motion>", self._drag_move)
+        tk.Frame(body, bg=T["border"], height=1).pack(fill="x")
 
-        self.view = tk.Frame(root, bg="#000000")
+        self.view = tk.Frame(body, bg=T["bg"])
         self.view.pack(fill="both", expand=True)
-        self.placeholder = tk.Label(self.view, text="waiting for the AI…", bg="#000000", fg=DIM,
-                                    font=("Segoe UI", 9))
+        self.placeholder = tk.Label(self.view, text=cap("Waiting for the AI") + " …", bg=T["bg"], fg=T["dim"],
+                                    font=(T["font"], 8))
         self.placeholder.place(relx=0.5, rely=0.5, anchor="center")
         self.view.bind("<Double-Button-1>", lambda e: self.bring_forward())
 
-        foot = tk.Frame(root, bg=BAR)
+        tk.Frame(body, bg=T["border"], height=1).pack(fill="x")
+        foot = tk.Frame(body, bg=T["bg"])
         foot.pack(fill="x")
-        self.status = tk.Label(foot, text="", bg=BAR, fg=FG, font=("Segoe UI", 9), anchor="w", justify="left")
-        self.status.pack(side="left", fill="x", expand=True, padx=self.px(8), pady=self.px(4))
-        grip = tk.Label(foot, text="◢", bg=BAR, fg=DIM, cursor="size_nw_se")
+        self.status = tk.Label(foot, text="", bg=T["bg"], fg=T["fg"], font=(T["mono"], 8), anchor="w",
+                               justify="left")
+        self.status.pack(side="left", fill="x", expand=True, padx=self.px(8), pady=self.px(5))
+        grip = tk.Canvas(foot, width=self.px(14), height=self.px(14), bg=T["bg"], highlightthickness=0,
+                         cursor="size_nw_se")
         grip.pack(side="right", anchor="se")
+        g = self.px(14)
+        if T["brackets"]:  # HUD corner bracket doubles as the resize grip
+            grip.create_line(g - 1, 0, g - 1, g - 1, 0, g - 1, fill=T["accent"], width=2)
+        else:
+            for i in (4, 8, 12):
+                grip.create_line(g, g - self.px(i), g - self.px(i), g, fill=T["dim"])
         grip.bind("<Button-1>", self._drag_start)
         grip.bind("<B1-Motion>", self._resize_move)
+        if T["brackets"]:  # top-left corner bracket, like the Jarvis HUD panels
+            tl = tk.Canvas(root, width=g, height=g, bg=T["bar"], highlightthickness=0)
+            tl.place(x=0, y=0)
+            tl.create_line(1, g - 1, 1, 1, g - 1, 1, fill=T["accent"], width=2)
+            for ev, fn in (("<Button-1>", self._drag_start), ("<B1-Motion>", self._drag_move)):
+                tl.bind(ev, fn)
 
         # The DWM live view paints above everything inside our window, so the AI's cursor gets its own
         # tiny click-through window on top of the viewer.
@@ -121,8 +171,8 @@ class Viewer:
         cv.pack()
         c, r1, r2 = d / 2, d / 2 - 2, d / 2 - 5
         cv.create_oval(c - r1, c - r1, c + r1, c + r1, outline="#000000", width=self.px(4))
-        cv.create_oval(c - r1, c - r1, c + r1, c + r1, outline="#ff00c8", width=self.px(2))
-        cv.create_oval(c - 2, c - 2, c + 2, c + 2, fill="#ff00c8", outline="")
+        cv.create_oval(c - r1, c - r1, c + r1, c + r1, outline=T["cursor"], width=self.px(2))
+        cv.create_oval(c - 2, c - 2, c + 2, c + 2, fill=T["cursor"], outline="")
         self.cur_size, self.cursor = d, None
 
         g = activity.prefs().get("geometry")
@@ -223,9 +273,12 @@ class Viewer:
     def _place_thumb(self):
         if not self.thumb:
             self.placeholder.place(relx=0.5, rely=0.5, anchor="center")
+            self.thumb_rect = None
+            self._place_cursor()  # no live picture -> no cursor anywhere
             return
         self.root.update_idletasks()
-        vx, vy = self.view.winfo_x(), self.view.winfo_y()
+        # thumbnail coordinates are relative to the top-level window, not the view's parent frame
+        vx, vy = self.view.winfo_rootx() - self.root.winfo_rootx(), self.view.winfo_rooty() - self.root.winfo_rooty()
         vw, vh = self.view.winfo_width(), self.view.winfo_height()
         size = W.SIZE()
         dwmapi.DwmQueryThumbnailSourceSize(self.thumb, ctypes.byref(size))
@@ -237,27 +290,49 @@ class Viewer:
         p = _ThumbProps(0x1 | 0x4 | 0x8 | 0x10, W.RECT(x, y, x + w, y + h), W.RECT(), 255, True, False)
         dwmapi.DwmUpdateThumbnailProperties(self.thumb, ctypes.byref(p))
         self.placeholder.place_forget()
-        self.thumb_rect = (x, y, s)
+        self.thumb_rect = (x, y, w, h, s, size.cx, size.cy)
         self._place_cursor()
 
     def _place_cursor(self):
-        """Put the AI-cursor marker over the live view, where the AI's cursor is in the real window."""
-        if not (self.visible and self.cursor and self.thumb_rect and self.src and user32.IsWindow(self.src)):
-            user32.ShowWindow(self.cur_hwnd, SW_HIDE)
+        """Put the AI-cursor marker over the live view, where the AI's cursor is in the real window.
+
+        The marker is its own little window, so it must NEVER be left anywhere else on the user's
+        screen: it is hidden unless every check passes and the point lands inside the live picture.
+        """
+        pos = self._cursor_pos()
+        if pos is None:
+            if user32.IsWindowVisible(self.cur_hwnd):
+                user32.ShowWindow(self.cur_hwnd, SW_HIDE)
             return
-        x, y, s = self.thumb_rect
+        user32.SetWindowPos(self.cur_hwnd, HWND_TOPMOST, pos[0], pos[1], 0, 0,
+                            SWP_NOSIZE | SWP_NOACTIVATE | 0x40)  # SWP_SHOWWINDOW
+
+    def _cursor_pos(self):
+        if not (self.visible and self.cursor and self.thumb_rect and self.src):
+            return None
+        if not user32.IsWindow(self.src) or user32.IsIconic(self.src):
+            return None
+        x, y, w, h, s, src_w, src_h = self.thumb_rect
+        size = W.SIZE()
+        if dwmapi.DwmQueryThumbnailSourceSize(self.thumb, ctypes.byref(size)) != 0:
+            return None
+        if (size.cx, size.cy) != (src_w, src_h):  # the window was resized: re-fit first
+            self._place_thumb()
+            return None
         outer, vis = core._frame_rect(self.src)  # the thumbnail includes the invisible resize border
         cx = x + (self.cursor[0] + vis.left - outer.left) * s
         cy = y + (self.cursor[1] + vis.top - outer.top) * s
-        sx = self.root.winfo_rootx() + round(cx) - self.cur_size // 2
-        sy = self.root.winfo_rooty() + round(cy) - self.cur_size // 2
-        user32.SetWindowPos(self.cur_hwnd, HWND_TOPMOST, sx, sy, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | 0x40)
+        if not (x <= cx <= x + w and y <= cy <= y + h):
+            return None  # outside the live picture
+        return (self.root.winfo_rootx() + round(cx) - self.cur_size // 2,
+                self.root.winfo_rooty() + round(cy) - self.cur_size // 2)
 
     # ---------- polling ----------
     def _tick(self):
         try:
             self._keep_user_focus()
             self._poll()
+            self._place_cursor()  # every tick: follows the window, and hides the moment it's invalid
         except Exception:
             pass
         self.root.after(200, self._tick)
@@ -283,11 +358,12 @@ class Viewer:
             return
         if self.src and not user32.IsWindow(self.src):
             self._set_source(0)
+            self.cursor = None
             self.status.config(text="the window was closed")
         if m == self.mtime:
             idle = time.time() - self.last_seen
             if self.last_seen and idle > 30:
-                self.title.config(fg=DIM)
+                self.label.config(fg=self.T["dim"])  # idle: the accent fades
             if self.visible and self.thumb:
                 note = "   · minimized, showing its last frame" if user32.IsIconic(self.src) else ""
                 self.status.config(text=self.base_status + note)
@@ -302,7 +378,8 @@ class Viewer:
         else:
             self._place_cursor()
         title = cur.get("title", "")
-        self.title.config(text=f"AI view · {title[:48]}", fg=FG)
+        self.title.config(text=title[:44])
+        self.label.config(fg=self.T["accent"])
         lines = [f"▸ {r['action']} {r.get('detail', '')}".strip() for r in data.get("recent", [])[-2:]]
         how = f"   ({cur['method']})" if cur.get("method") else ""
         self.base_status = "\n".join(lines) + how

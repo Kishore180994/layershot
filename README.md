@@ -165,6 +165,9 @@ cursor and its last actions.
 - Drag the top bar to move it and drag the corner to resize; both are remembered.
 - **✕** closes it, and it stays closed until you press **Ctrl+Alt+L**, which shows/hides it any time.
 - **Bring forward** (or double-click the picture) puts the AI's window in front.
+- `layershot viewer --theme hud` switches to a cyan HUD look (navy panel, corner brackets,
+  spaced caps). `default` is neutral dark. For your own colors, set `"theme": {"base": "hud", "accent": "#ff9900"}`
+  in `%LOCALAPPDATA%\layershot\prefs.json`.
 - `layershot viewer --hotkey "ctrl+shift+f9"` changes the hotkey, `layershot viewer --off` stops it from
   opening automatically, and `layershot viewer --quit` closes it.
 

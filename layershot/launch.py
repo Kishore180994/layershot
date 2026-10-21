@@ -133,13 +133,16 @@ def _watch(before: set, user_fg, front: bool, wait: float) -> tuple[dict[int, Wi
     new: dict[int, WindowInfo] = {}
     stole = 0
     last_new = time.monotonic()
+    tick = 0
     while time.monotonic() < deadline:
-        for w in core.list_windows():
-            if w.hwnd not in before and w.hwnd not in new:
-                new[w.hwnd] = w
-                last_new = time.monotonic()
-                if not front:
-                    user32.SetWindowPos(w.hwnd, HWND_BOTTOM, 0, 0, 0, 0, QUIET)
+        if tick % 5 == 0:  # window scan every 50 ms, focus check every 10 ms
+            for w in core.list_windows():
+                if w.hwnd not in before and w.hwnd not in new:
+                    new[w.hwnd] = w
+                    last_new = time.monotonic()
+                    if not front:
+                        user32.SetWindowPos(w.hwnd, HWND_BOTTOM, 0, 0, 0, 0, QUIET)
+        tick += 1
         fg = user32.GetForegroundWindow()
         if not front and user_fg and fg != user_fg and user32.IsWindow(user_fg):
             # something grabbed focus during our launch: our new window, or an existing
@@ -150,5 +153,5 @@ def _watch(before: set, user_fg, front: bool, wait: float) -> tuple[dict[int, Wi
             _force_foreground(user_fg)
         if new and time.monotonic() - last_new > 1.0:
             break  # windows appeared and nothing new for a second: settled
-        time.sleep(0.05)
+        time.sleep(0.01)
     return new, stole

@@ -47,6 +47,7 @@ def main(argv=None):
     vw.add_argument("--on", action="store_true", help="start it automatically again (default)")
     vw.add_argument("--quit", action="store_true", help="close the running viewer")
     vw.add_argument("--hotkey", help='show/hide hotkey, e.g. "ctrl+alt+l" (takes effect on next start)')
+    vw.add_argument("--theme", help="default | hud (cyan HUD look); takes effect on next start")
     st = sub.add_parser("setup", help="register the MCP server with your agents and add the agent rule")
     st.add_argument("--agents", help="comma list: claude-code,codex,claude-desktop,cursor,hermes "
                                      "(default: every one installed)")
@@ -73,11 +74,13 @@ def main(argv=None):
         from . import activity
         if a.hotkey:
             activity.save_prefs(hotkey=a.hotkey)
+        if a.theme:
+            activity.save_prefs(theme=a.theme)
         if a.off or a.on:
             activity.save_prefs(viewer="off" if a.off else "auto")
         if a.quit:
             activity.save_prefs(quit=True)
-        if not (a.off or a.on or a.quit or a.hotkey):
+        if not (a.off or a.on or a.quit or a.hotkey or a.theme):
             activity.save_prefs(viewer_hidden=False)
             from .viewer import main as run_viewer
             return run_viewer()

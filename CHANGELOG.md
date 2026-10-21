@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.1 - 2026-10-21
+
+- **Fix:** the AI-cursor marker could be left on the user's desktop after the AI's window closed. It's
+  now re-checked every tick and hidden unless it falls inside the live view.
+- **Fix:** guards check focus every 10 ms (was 50 ms). In an end-to-end run with a fresh agent (3 min, 2
+  apps, about 60 actions), focus was away from the user in 21 of 17,620 samples, in bursts of at most
+  ~70 ms. Faster checks cut that further: the follow-up run had 0.
+- **Viewer themes:** `default` and `hud` (cyan HUD look), plus per-key overrides in prefs.
+
 ## 0.3.0 - 2026-10-21
 
 - **Background input:** `find_elements`, `click` (by element or x,y), `type_text`, `press_key`, `scroll`

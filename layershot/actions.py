@@ -82,17 +82,20 @@ def _behind_user(target: int, settle: float = 0.6):
         yield
         _flush(target)  # let the app handle what we posted while we're still watching
         end = time.monotonic() + settle
+        tick = 0
         while time.monotonic() < end:
-            for w in core.list_windows():
-                if w.hwnd not in before:
-                    before.add(w.hwnd)
-                    if user_fg:  # directly behind the user's window, not activated
-                        user32.SetWindowPos(w.hwnd, user_fg, 0, 0, 0, 0, QUIET)
-            fg = user32.GetForegroundWindow()
+            if tick % 5 == 0:  # the window scan is the heavy part: every 50 ms
+                for w in core.list_windows():
+                    if w.hwnd not in before:
+                        before.add(w.hwnd)
+                        if user_fg:  # directly behind the user's window, not activated
+                            user32.SetWindowPos(w.hwnd, user_fg, 0, 0, 0, 0, QUIET)
+            fg = user32.GetForegroundWindow()  # focus is checked every 10 ms: steals last <= ~10 ms
             if user_fg and fg != user_fg and user32.IsWindow(user_fg):
                 user32.SetWindowPos(fg, user_fg, 0, 0, 0, 0, QUIET)
                 _force_foreground(user_fg)
-            time.sleep(0.05)
+            tick += 1
+            time.sleep(0.01)
     finally:
         if locked:
             user32.LockSetForegroundWindow(LSFW_UNLOCK)
