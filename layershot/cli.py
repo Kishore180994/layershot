@@ -26,6 +26,27 @@ def main(argv=None):
     op.add_argument("--front", action="store_true", help="open in front and focus it")
     fr = sub.add_parser("front", help="bring a window to the front (restores if minimized)")
     fr.add_argument("target", help="layer number or title substring")
+    el = sub.add_parser("elements", help="list a window's controls (ids for click/type)")
+    el.add_argument("target")
+    el.add_argument("--query")
+    ck = sub.add_parser("click", help="click in a background window: by element id or x y (full-size px)")
+    ck.add_argument("target")
+    ck.add_argument("where", nargs="+", help="element id like e12, or x y")
+    ck.add_argument("--right", action="store_true")
+    ck.add_argument("--double", action="store_true")
+    ty = sub.add_parser("type", help="type text into a background window")
+    ty.add_argument("target")
+    ty.add_argument("text")
+    ty.add_argument("--element")
+    ty.add_argument("--enter", action="store_true")
+    ky = sub.add_parser("key", help="press a key in a background window (enter, tab, esc, ...)")
+    ky.add_argument("target")
+    ky.add_argument("key")
+    vw = sub.add_parser("viewer", help="the floating AI-view window (runs it; agents start it automatically)")
+    vw.add_argument("--off", action="store_true", help="never start it automatically")
+    vw.add_argument("--on", action="store_true", help="start it automatically again (default)")
+    vw.add_argument("--quit", action="store_true", help="close the running viewer")
+    vw.add_argument("--hotkey", help='show/hide hotkey, e.g. "ctrl+alt+l" (takes effect on next start)')
     st = sub.add_parser("setup", help="register the MCP server with your agents and add the agent rule")
     st.add_argument("--agents", help="comma list: claude-code,codex,claude-desktop,cursor,hermes "
                                      "(default: every one installed)")
@@ -46,6 +67,37 @@ def main(argv=None):
         print(("[dry run] " if a.dry_run else "") + "server command: " + " ".join(server_command()))
         for name, what in rows or [("-", "no supported agents found")]:
             print(f"  {name:<15} {what}")
+        return 0
+
+    if a.cmd == "viewer":
+        from . import activity
+        if a.hotkey:
+            activity.save_prefs(hotkey=a.hotkey)
+        if a.off or a.on:
+            activity.save_prefs(viewer="off" if a.off else "auto")
+        if a.quit:
+            activity.save_prefs(quit=True)
+        if not (a.off or a.on or a.quit or a.hotkey):
+            activity.save_prefs(viewer_hidden=False)
+            from .viewer import main as run_viewer
+            return run_viewer()
+        print("viewer prefs:", activity.prefs())
+        return 0
+
+    if a.cmd in ("elements", "click", "type", "key"):
+        from . import actions
+        t = int(a.target) if a.target.isdigit() else a.target
+        if a.cmd == "elements":
+            r = actions.find_elements(t, query=a.query)
+            for e in r["elements"]:
+                print(f"{e['id']:>5} {e['type']:<10} {e['name'][:50]:<50} {e['rect']} {','.join(e['actions'])}")
+        elif a.cmd == "click":
+            kw = ({"element": a.where[0]} if len(a.where) == 1 else {"x": float(a.where[0]), "y": float(a.where[1])})
+            print(actions.click(t, button="right" if a.right else "left", double=a.double, **kw))
+        elif a.cmd == "type":
+            print(actions.type_text(t, text=a.text, element=a.element, enter=a.enter))
+        else:
+            print(actions.press_key(t, key=a.key))
         return 0
 
     from . import core

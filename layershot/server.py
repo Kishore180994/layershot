@@ -8,8 +8,9 @@ try:  # mcp >= 2
 except ImportError:  # mcp 1.x
     from mcp.server.fastmcp import FastMCP as _Server, Image
 
-from . import core
+from PIL import ImageDraw
 
+from . import activity, actions, core
 from .rules import RULES
 
 # Clients that support server instructions (Claude Code, Claude Desktop, ...) put these in the model's
@@ -18,15 +19,36 @@ mcp = _Server("layershot", instructions=RULES + "\nLayers: list_windows shows wi
               "is the window the user is working in.")
 
 
-def _encode(img, max_width: int, fmt: str) -> Image:
+def _encode(img, max_width: int, fmt: str, hwnd: int | None = None) -> Image:
+    full_w = img.width
     if max_width and img.width > max_width:
         img = img.resize((max_width, round(img.height * max_width / img.width)))
+    if hwnd is not None:
+        actions.scales[hwnd] = img.width / full_w  # so click(x, y) can use this image's pixels
+        if (c := actions.cursor_in_image(hwnd)) is not None:
+            img = img.convert("RGB")
+            _draw_cursor(img, *c)
     buf = io.BytesIO()
     if fmt == "jpeg":
         img.save(buf, "JPEG", quality=85)
     else:
         img.save(buf, "PNG", optimize=True)
     return Image(data=buf.getvalue(), format=fmt)
+
+
+def _draw_cursor(img, x: int, y: int):
+    """The AI's own cursor, drawn only on the AI's copy of the screenshot (never on the screen)."""
+    d = ImageDraw.Draw(img)
+    for r, col in ((11, (0, 0, 0)), (9, (255, 0, 200))):
+        d.ellipse((x - r, y - r, x + r, y + r), outline=col, width=3)
+    d.line((x - 16, y, x - 5, y), fill=(255, 0, 200), width=2)
+    d.line((x + 5, y, x + 16, y), fill=(255, 0, 200), width=2)
+    d.line((x, y - 16, x, y - 5), fill=(255, 0, 200), width=2)
+    d.line((x, y + 5, x, y + 16), fill=(255, 0, 200), width=2)
+
+
+def _win(layer, title, process, hwnd) -> dict:
+    return {"layer": layer, "title": title, "process": process, "hwnd": hwnd}
 
 
 @mcp.tool()
@@ -53,14 +75,71 @@ def screenshot_window(
     back of the stack and minimized again afterwards unless keep_open is true.
     max_width downsizes large windows (0 = full size); format is "png" or "jpeg".
     save_to also writes the full-size image to that path.
+    If you've clicked in this window, YOUR cursor is drawn as a magenta ring with a crosshair. Only you see it.
+    x/y you pass to click/scroll are pixels of the image this returns.
     """
     img, win = core.capture(layer=layer, title=title, process=process, hwnd=hwnd,
                             keep_open=keep_open)
     if save_to:
         img.save(save_to)
-    note = (f"{win.title} ({win.process}), layer {win.layer}, {img.width}x{img.height}"
+    out = _encode(img, max_width, "jpeg" if format.lower() in ("jpg", "jpeg") else "png", win.hwnd)
+    activity.log(win, "look", cursor=actions.cursors.get(win.hwnd))
+    s = actions.scales.get(win.hwnd, 1.0)
+    note = (f"{win.title} ({win.process}), layer {win.layer}, image {round(img.width * s)}x{round(img.height * s)}"
             + (", was minimized" if win.minimized else ""))
-    return [note, _encode(img, max_width, "jpeg" if format.lower() in ("jpg", "jpeg") else "png")]
+    if (c := actions.cursor_in_image(win.hwnd)) is not None:
+        note += f", your cursor at {c[0]},{c[1]}"
+    return [note, out]
+
+
+@mcp.tool()
+def find_elements(layer: int | None = None, title: str | None = None, process: str | None = None,
+                  hwnd: int | None = None, query: str | None = None, limit: int = 150) -> dict:
+    """List a window's buttons, fields, tabs, menu items, etc. (UI Automation) without touching it.
+    Each has an `id` to pass to click/type_text, a `rect` in the same pixels as your last
+    screenshot of the window, and the `actions` it supports. query filters by name or type."""
+    return actions.find_elements(**_win(layer, title, process, hwnd), query=query, limit=limit)
+
+
+@mcp.tool()
+def click(layer: int | None = None, title: str | None = None, process: str | None = None,
+          hwnd: int | None = None, element: str | None = None, x: float | None = None,
+          y: float | None = None, button: str = "left", double: bool = False) -> dict:
+    """Click in a window WITHOUT bringing it forward or moving the user's mouse.
+    Prefer `element` (an id from find_elements): it's pressed through accessibility. Otherwise
+    give x, y in pixels of your last screenshot_window image; the click goes to that spot as
+    window messages, from your own invisible cursor. Any dialog or popup it opens is kept behind
+    the user's app. Take a screenshot afterwards to check: some apps ignore background clicks."""
+    return actions.click(**_win(layer, title, process, hwnd), element=element, x=x, y=y,
+                         button=button, double=double)
+
+
+@mcp.tool()
+def type_text(text: str, layer: int | None = None, title: str | None = None, process: str | None = None,
+              hwnd: int | None = None, element: str | None = None, append: bool = False,
+              enter: bool = False) -> dict:
+    """Type into a window in the background. With `element` (from find_elements) the field's value is
+    set directly (append=True keeps the existing text); without it the characters go to whatever
+    control has focus inside that window. enter=True presses Enter afterwards."""
+    return actions.type_text(**_win(layer, title, process, hwnd), text=text, element=element,
+                             append=append, enter=enter)
+
+
+@mcp.tool()
+def press_key(key: str, layer: int | None = None, title: str | None = None, process: str | None = None,
+              hwnd: int | None = None, element: str | None = None) -> dict:
+    """Press one key in a background window: enter, tab, esc, backspace, delete, space, arrows,
+    home/end, pageup/pagedown, f1-f12, or a single character. Shortcuts with Ctrl/Alt don't
+    work in the background (Windows reads modifier state from the real keyboard)."""
+    return actions.press_key(**_win(layer, title, process, hwnd), key=key, element=element)
+
+
+@mcp.tool()
+def scroll(layer: int | None = None, title: str | None = None, process: str | None = None,
+           hwnd: int | None = None, x: float | None = None, y: float | None = None, amount: int = -3) -> dict:
+    """Scroll a background window at x, y (screenshot pixels; default = centre). amount in notches,
+    negative = down."""
+    return actions.scroll(**_win(layer, title, process, hwnd), x=x, y=y, amount=amount)
 
 
 @mcp.tool()
@@ -76,7 +155,11 @@ def open_app(target: str, args: str | None = None, cwd: str | None = None, front
     path (opens with its default app), or a URL. args: command-line arguments.
     """
     from . import launch
-    return launch.open_app(target, args, cwd, front=front, wait=wait)
+    r = launch.open_app(target, args, cwd, front=front, wait=wait)
+    if r["windows"]:
+        activity.log(core.find_window(hwnd=r["windows"][0]["hwnd"]), "open", target,
+                     "front" if front else "background")
+    return r
 
 
 @mcp.tool()

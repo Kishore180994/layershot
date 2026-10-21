@@ -1,7 +1,15 @@
 # layershot
 
-**Screenshot any Windows app window without stealing focus, even when it's covered or minimized.
-Open apps in the background too.**
+**Let AI agents see, open, click and type in Windows apps *behind* the one you're using.
+They never take over your screen, mouse or keyboard.**
+
+- **See:** screenshot any window, even covered or minimized ones.
+- **Open:** launch apps behind your windows; they can't grab focus.
+- **Act:** click, type, press keys and scroll in background windows through accessibility (UI
+  Automation) or direct window messages. Your real mouse never moves, and dialogs and popups stay behind your app.
+- **Watch:** a floating *AI view* shows a live picture of the window the agent is working in, its
+  cursor, and what it's doing. You can move it, close it, show/hide it with **Ctrl+Alt+L**, and
+  **Bring forward** puts the AI's window in front when you want it.
 
 AI agents (Claude Code, Codex, Hermes, computer-use tools…) usually look at an app by
 switching to it and grabbing the screen. That yanks the window in front of you, and you
@@ -136,6 +144,39 @@ Tools:
   window(s) with their layers.
 - `bring_to_front(layer | title | process | hwnd)` restores and focuses a window, for user requests
   only.
+- `find_elements(window, query=None)` lists buttons, fields, tabs and menu items with an `id`, a `rect` (in
+  the pixels of the agent's last screenshot) and the `actions` each supports.
+- `click(window, element=… | x=…, y=…, button="left", double=False)` tries accessibility first, then
+  window messages at the AI's own invisible cursor.
+- `type_text(text, window, element=None, append=False, enter=False)`, `press_key(key, window)` and
+  `scroll(window, x, y, amount)`.
+
+After a click, `screenshot_window` draws the AI's cursor as a magenta ring on the agent's copy, so it
+can see where it clicked. Your screen never shows it.
+
+### The AI view (floating window)
+
+The first time an agent does something, a small window opens at the bottom-right of your screen
+showing a live picture of the window the agent is working in. It's live even while that window is
+behind yours, because it uses the same DWM thumbnails as taskbar previews. You also see the AI's
+cursor and its last actions.
+
+- It never takes focus or keystrokes, and it isn't in Alt+Tab.
+- Drag the top bar to move it and drag the corner to resize; both are remembered.
+- **✕** closes it, and it stays closed until you press **Ctrl+Alt+L**, which shows/hides it any time.
+- **Bring forward** (or double-click the picture) puts the AI's window in front.
+- `layershot viewer --hotkey "ctrl+shift+f9"` changes the hotkey, `layershot viewer --off` stops it from
+  opening automatically, and `layershot viewer --quit` closes it.
+
+### What works in the background
+
+| App type | See | Click / type |
+|---|---|---|
+| Classic Win32 (dialogs, Character Map, most older apps, wxWidgets like Bambu Studio) | ✅ | ✅ by element and by x,y |
+| Chrome / Edge / Electron (VS Code, Obsidian, Discord) | ✅ | ✅ by element (accessibility) |
+| WinUI / new Windows 11 apps (Notepad, Paint) | ✅ | ✅ by element and typing; ❌ x,y clicks and menus that need an active window |
+| Games, full-screen DirectX, 3D-view drags | ✅ (mostly) | ❌, so the agent asks you first |
+| Ctrl/Alt shortcuts | | ❌ (Windows reads modifiers from the real keyboard) |
 
 Titles match loosely: "Bambu Studio" finds `plate - BambuStudio` (`bambu-studio.exe`).
 
@@ -172,6 +213,11 @@ layershot shot <layer|title> [--process exe] [--hwnd 0x...] [-o out.png] [--keep
 layershot open [--front] <app|file|url> [args...]
 layershot front <layer|title>
 layershot setup [--agents a,b] [--no-rules] [--remove] [--dry-run]
+layershot elements <window> [--query text]
+layershot click <window> <e12 | x y> [--right] [--double]
+layershot type <window> "text" [--element e3] [--enter]
+layershot key <window> <enter|tab|esc|...>
+layershot viewer [--off | --on | --quit | --hotkey "ctrl+alt+l"]
 layershot serve            # MCP server on stdio (same as layershot-mcp)
 ```
 
@@ -185,7 +231,8 @@ layershot serve            # MCP server on stdio (same as layershot-mcp)
 - **Background opening:** an app that's *already open* and gets reused (a URL opening as a new
   tab in your existing browser, for example) stays where it is. If it still manages to activate
   itself, layershot hands focus back to you right away.
-- layershot looks and opens, but it doesn't click or type yet. Input into background windows (UI Automation / window messages) is planned for a later version.
+- **Background input** can't do everything: see the table above. When an agent can't do something in
+  the background, the rule tells it to ask you before taking over the screen.
 
 ## Development
 

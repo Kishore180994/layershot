@@ -182,6 +182,67 @@ We learned why layer 3 matters the hard way: a long-running Claude Code session 
 the window to the front, then screenshot" helper weeks earlier, and it kept using it, because that
 session had never loaded layershot.
 
+## Clicking and typing in background windows
+
+Windows has one mouse cursor and one keyboard focus, and both belong to the user. layershot never uses
+them. Each action tries two routes:
+
+1. **UI Automation (accessibility).** `find_elements` walks the window's control tree
+   (`FindAll(TreeScope_Descendants, ControlViewCondition)`, about 0.2 s for 130 controls) and keeps
+   actionable and named controls. `click(element=…)` uses the first pattern the element supports:
+   `Invoke`, `Toggle`, `SelectionItem.Select`, `ExpandCollapse`, or `LegacyIAccessible.DoDefaultAction`.
+   `type_text(element=…)` uses `ValuePattern.SetValue`. None of these needs the mouse or focus.
+2. **Window messages.** `click(x=, y=)` maps the screenshot pixel back to the screen, finds the
+   deepest child window at that point *inside the target* (`ChildWindowFromPointEx` repeatedly; this works
+   when the target is covered, unlike `WindowFromPoint`), and posts `WM_MOUSEMOVE`,
+   `WM_LBUTTONDOWN` and `WM_LBUTTONUP` in that child's coordinates. Typing posts `WM_CHAR` to the control that has
+   focus *inside that window's thread* (`GetGUIThreadInfo().hwndFocus`), which exists even while the
+   window is in the background.
+
+**The AI's cursor** is a per-window point that layershot tracks for the agent. It moves when the agent
+clicks or scrolls, gets drawn on the agent's screenshots (magenta ring) and in the AI view, and never
+touches the real cursor.
+
+**Keeping popups behind the user.** Every action runs inside a guard:
+
+1. Remember the user's window. If the foreground window belongs to the app being acted on, it isn't
+   the user's, so use the last window the user really had.
+2. Take `LockSetForegroundWindow` (the same trick as `open_app`).
+3. Do the action, then round-trip a `WM_NULL` with `SendMessageTimeout`. That returns only after the app has
+   processed everything we posted, so any focus grab happens *while we're still watching*. We added this
+   after a posted click on a dialog button activated Character Map just after the guard had stopped
+   watching.
+4. For 0.6 s, put every new window (dialogs, popups) directly behind the user's window
+   (`SetWindowPos(new, user_window, SWP_NOACTIVATE…)`). If anything took focus, give it back.
+
+Measured on Character Map: three x,y clicks on **Select** added `!!!` to the copy field, with **0** of
+our 10 ms samples showing focus away from the user.
+
+**Limits we measured.** Windows 11 Notepad (WinUI) accepts accessibility presses and `WM_CHAR` typing,
+but ignores posted mouse messages, and its File menu (a WinUI flyout) doesn't open while the window is
+inactive. Nothing leaks onto the user's screen; the action just has no effect. Ctrl/Alt shortcuts can't
+be posted, because apps read modifier state with `GetKeyState`, which reflects the real keyboard.
+
+## The AI view
+
+`layershot/viewer.py` is a separate single-instance process (named mutex `Local\layershot-viewer`) that
+every agent's server shares. Servers write the current target and a one-line description to
+`%LOCALAPPDATA%\layershot\activity.json`; the viewer polls it every 200 ms.
+
+- **Live picture:** `DwmRegisterThumbnail(viewer, target)`, the same thing taskbar previews use. The
+  compositor draws it, it's live even while the target is covered, and it costs almost nothing.
+- **AI cursor:** the thumbnail draws above everything in the viewer window, so the cursor is a second
+  tiny click-through window (`WS_EX_TRANSPARENT | WS_EX_LAYERED`, transparent colour key) positioned
+  over the thumbnail. Its position accounts for the target's invisible resize border, which the
+  thumbnail includes.
+- **Never takes focus:** `WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST`, shown with
+  `SW_SHOWNOACTIVATE`. Windows still hands a new process's first window the foreground once, so the
+  viewer tracks the user's last window and gives focus straight back. We measured one 10 ms sample on
+  the first start and none afterwards.
+- **Hotkey:** `RegisterHotKey` on a background thread with its own message loop (default Ctrl+Alt+L).
+- **Close (✕)** sets `viewer_hidden` in `prefs.json`, so agents don't pop it back up. The hotkey clears
+  it. Position and size are saved there too.
+
 ## Things that will not work
 
 | Case | Result |
@@ -208,10 +269,8 @@ WGC is a good backend to add later for streaming or video.
 ## Ideas / roadmap
 
 - ~~Open apps in the background~~: done in 0.2.0 (`open_app`).
-- **Background input:** click and type into a background window without focusing it, using
-  UI Automation patterns (`InvokePattern`, `ValuePattern`) first and window messages
-  (`PostMessage WM_LBUTTONDOWN/WM_CHAR`) as a fallback. That's the other half of "agents shouldn't take over
-  the PC".
+- ~~Background input~~: done in 0.3.0 (`click`, `type_text`, `press_key`, `scroll`). Still open: drags,
+  and shortcuts with modifiers.
 - **Region capture:** return only a sub-rectangle (e.g. one UI element from UI Automation).
 - **Change detection:** "wait until this window looks different", for agents watching a long
   task.

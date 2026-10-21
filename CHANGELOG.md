@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.0 - 2026-10-21
+
+- **Background input:** `find_elements`, `click` (by element or x,y), `type_text`, `press_key`, `scroll`
+  (MCP tools and CLI). UI Automation first, posted window messages second. The real mouse and keyboard
+  are never used.
+- **Dialogs and popups stay behind the user's app.** Each action holds the foreground lock, flushes the
+  app's message queue while watching, and puts new windows directly behind the user's window.
+- **AI cursor:** a per-window virtual cursor, drawn on the agent's screenshots and in the AI view only.
+- **AI view:** a floating, movable, closable live view of the agent's current window (DWM thumbnail),
+  with the AI cursor and recent actions. Ctrl+Alt+L shows/hides it, and **Bring forward** / double-click puts
+  the AI's window in front. It never takes focus.
+- New dependency: `comtypes` (UI Automation).
+- Measured: Notepad typing, Enter and accessibility presses in the background; 3 x,y clicks in Character
+  Map with 0 focus samples lost. Known limit: WinUI apps ignore posted mouse clicks and inactive-window
+  flyout menus.
+
 ## 0.2.0 - 2026-10-20
 
 - **`open_app`** (MCP tool, `layershot.open_app`, `layershot open`): open an exe, file, folder or URL
