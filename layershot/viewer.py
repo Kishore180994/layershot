@@ -40,24 +40,52 @@ SWP_NOMOVE, SWP_NOSIZE, SWP_NOACTIVATE = 0x2, 0x1, 0x10
 WM_HOTKEY, MOD = 0x312, {"alt": 1, "ctrl": 2, "control": 2, "shift": 4, "win": 8}
 MOD_NOREPEAT = 0x4000
 
-# Pick with `layershot viewer --theme hud` (prefs "theme"), or LAYERSHOT_THEME. A dict in prefs "theme"
-# overrides single keys, e.g. {"base": "hud", "accent": "#ff9900"}.
-THEMES = {
-    "default": dict(bg="#101418", bar="#1b2128", border="#30363d", fg="#e6edf3", dim="#8b949e",
-                    accent="#58a6ff", danger="#ff7b72", cursor="#ff00c8", font="Segoe UI", mono="Consolas",
-                    caps=False, brackets=False),
-    # cyan HUD: navy glass panels, cyan hairline border, corner brackets, spaced caps headers
-    "hud": dict(bg="#030e1a", bar="#082a3a", border="#10556a", fg="#d7f6ff", dim="#6fb4c9",
-                accent="#2ad8ff", danger="#ff4d5e", cursor="#ffb547", font="Bahnschrift",
-                mono="Cascadia Mono", caps=True, brackets=True),
-}
+from .theme import current as _theme, cursor as _cursor_image
 
 
-def _theme() -> dict:
-    p = os.environ.get("LAYERSHOT_THEME") or activity.prefs().get("theme") or "default"
-    if isinstance(p, dict):
-        return THEMES.get(p.get("base", "default"), THEMES["default"]) | {k: v for k, v in p.items() if k != "base"}
-    return THEMES.get(p, THEMES["default"])
+class _BIH(ctypes.Structure):
+    _fields_ = [("biSize", W.DWORD), ("biWidth", W.LONG), ("biHeight", W.LONG), ("biPlanes", W.WORD),
+                ("biBitCount", W.WORD), ("biCompression", W.DWORD), ("biSizeImage", W.DWORD),
+                ("biXPelsPerMeter", W.LONG), ("biYPelsPerMeter", W.LONG), ("biClrUsed", W.DWORD),
+                ("biClrImportant", W.DWORD)]
+
+
+class _Blend(ctypes.Structure):
+    _fields_ = [("op", ctypes.c_ubyte), ("flags", ctypes.c_ubyte), ("alpha", ctypes.c_ubyte), ("fmt", ctypes.c_ubyte)]
+
+
+def _set_layered_bitmap(hwnd, img):
+    """Give a WS_EX_LAYERED window an RGBA image with real per-pixel alpha (soft glows, no colour key)."""
+    from PIL import Image, ImageChops
+    r, g, b, a = img.split()
+    pm = [ImageChops.multiply(ch, a) for ch in (b, g, r)]  # premultiplied BGRA
+    data = Image.merge("RGBA", (*pm, a)).tobytes()
+    w, h = img.size
+    gdi = ctypes.windll.gdi32
+    gdi.CreateCompatibleDC.restype = W.HDC
+    gdi.CreateDIBSection.restype = W.HBITMAP
+    gdi.CreateDIBSection.argtypes = [W.HDC, ctypes.c_void_p, W.UINT, ctypes.POINTER(ctypes.c_void_p),
+                                     W.HANDLE, W.DWORD]
+    gdi.SelectObject.restype = W.HGDIOBJ
+    gdi.SelectObject.argtypes = [W.HDC, W.HGDIOBJ]
+    user32.GetDC.restype = W.HDC
+    user32.UpdateLayeredWindow.argtypes = [W.HWND, W.HDC, ctypes.c_void_p, ctypes.c_void_p, W.HDC,
+                                           ctypes.c_void_p, W.DWORD, ctypes.c_void_p, W.DWORD]
+    screen = user32.GetDC(None)
+    mem = gdi.CreateCompatibleDC(screen)
+    bits = ctypes.c_void_p()
+    bmi = _BIH(ctypes.sizeof(_BIH), w, -h, 1, 32, 0, 0, 0, 0, 0, 0)
+    bmp = gdi.CreateDIBSection(mem, ctypes.byref(bmi), 0, ctypes.byref(bits), None, 0)
+    ctypes.memmove(bits, data, len(data))
+    old = gdi.SelectObject(mem, bmp)
+    size, src = W.SIZE(w, h), W.POINT(0, 0)
+    blend = _Blend(0, 0, 255, 1)  # AC_SRC_OVER, AC_SRC_ALPHA
+    user32.UpdateLayeredWindow(W.HWND(hwnd), screen, None, ctypes.byref(size), mem, ctypes.byref(src),
+                               0, ctypes.byref(blend), 2)  # ULW_ALPHA
+    gdi.SelectObject(mem, old)
+    gdi.DeleteObject(bmp)
+    gdi.DeleteDC(mem)
+    user32.ReleaseDC(None, screen)
 
 
 def _spaced(s: str) -> str:
@@ -82,6 +110,8 @@ def _parse_hotkey(spec: str) -> tuple[int, int]:
 class Viewer:
     def __init__(self):
         self.user_fg = user32.GetForegroundWindow()  # the user's window, before we exist
+        if activity.prefs().get("quit"):  # a quit meant for an earlier viewer must not stop this one
+            activity.save_prefs(quit=False)
         self.hotkey =os.environ.get("LAYERSHOT_HOTKEY") or activity.prefs().get("hotkey") or "ctrl+alt+l"
         self.toggle_requested = threading.Event()
         self.hotkey_ok = threading.Event()
@@ -162,18 +192,14 @@ class Viewer:
 
         # The DWM live view paints above everything inside our window, so the AI's cursor gets its own
         # tiny click-through window on top of the viewer.
-        d = self.px(26)
-        self.cur = tk.Toplevel(root, bg="#010101")
+        # Its image comes from the theme (default: a normal arrow with a blue highlight) and is drawn
+        # with per-pixel alpha via UpdateLayeredWindow, so glows stay soft.
+        self.cur_img, self.cur_hot = _cursor_image(T, height=self.px(30))
+        self.cur = tk.Toplevel(root)
         self.cur.withdraw()
         self.cur.overrideredirect(True)
-        self.cur.attributes("-transparentcolor", "#010101")
-        cv = tk.Canvas(self.cur, width=d, height=d, bg="#010101", highlightthickness=0)
-        cv.pack()
-        c, r1, r2 = d / 2, d / 2 - 2, d / 2 - 5
-        cv.create_oval(c - r1, c - r1, c + r1, c + r1, outline="#000000", width=self.px(4))
-        cv.create_oval(c - r1, c - r1, c + r1, c + r1, outline=T["cursor"], width=self.px(2))
-        cv.create_oval(c - 2, c - 2, c + 2, c + 2, fill=T["cursor"], outline="")
-        self.cur_size, self.cursor = d, None
+        self.cur.geometry(f"{self.cur_img.width}x{self.cur_img.height}")
+        self.cursor = None
 
         g = activity.prefs().get("geometry")
         if not g:
@@ -188,8 +214,9 @@ class Viewer:
         self.cur.update_idletasks()
         self.cur_hwnd = user32.GetAncestor(self.cur.winfo_id(), 2) or self.cur.winfo_id()
         ex = user32.GetWindowLongPtrW(self.cur_hwnd, GWL_EXSTYLE)  # + WS_EX_TRANSPARENT: clicks pass through
-        user32.SetWindowLongPtrW(self.cur_hwnd, GWL_EXSTYLE,
-                                 ex | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST | 0x20)
+        user32.SetWindowLongPtrW(self.cur_hwnd, GWL_EXSTYLE,  # 0x80000 LAYERED, 0x20 TRANSPARENT
+                                 ex | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST | 0x80000 | 0x20)
+        _set_layered_bitmap(self.cur_hwnd, self.cur_img)
         self.thumb_rect = None
 
         self.thumb = ctypes.c_void_p()
@@ -324,8 +351,8 @@ class Viewer:
         cy = y + (self.cursor[1] + vis.top - outer.top) * s
         if not (x <= cx <= x + w and y <= cy <= y + h):
             return None  # outside the live picture
-        return (self.root.winfo_rootx() + round(cx) - self.cur_size // 2,
-                self.root.winfo_rooty() + round(cy) - self.cur_size // 2)
+        return (self.root.winfo_rootx() + round(cx) - self.cur_hot[0],
+                self.root.winfo_rooty() + round(cy) - self.cur_hot[1])
 
     # ---------- polling ----------
     def _tick(self):

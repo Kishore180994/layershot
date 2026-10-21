@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.2 - 2026-10-21
+
+- **AI cursor redesign:** a normal arrow with a blue highlight (`hud` theme: cyan), drawn with real
+  per-pixel alpha (UpdateLayeredWindow) in the AI view and on the agent's screenshots. Themes can
+  use any PNG (`cursor_image`, `cursor_hotspot`, `cursor_height`).
+- Themes moved to `layershot/theme.py` (shared by the viewer and the server).
+- **Fix:** a `--quit` aimed at a viewer that wasn't running stayed in prefs and closed the next
+  viewer at startup. The viewer now clears it on start, and the CLI only sets it when a viewer is running.
+
 ## 0.3.1 - 2026-10-21
 
 - **Fix:** the AI-cursor marker could be left on the user's desktop after the AI's window closed. It's

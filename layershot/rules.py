@@ -19,7 +19,7 @@ The user keeps working while you run. Use layershot to look at and open apps.
 - Acting: click, type and press keys in the background with `find_elements` + `click(element=...)`
   / `type_text` / `press_key` / `scroll`. Prefer element ids (accessibility); use `click(x=, y=)` with
   pixels from your last screenshot only when there's no element. Check the result with
-  `screenshot_window`. Your cursor shows as a magenta ring there. Never move the real mouse or send
+  `screenshot_window`. Your cursor shows there as a glowing arrow (its tip is the point). Never move the real mouse or send
   real keystrokes (SendInput, pyautogui, etc.).
 - The user asked: only when the user asks to open, show or switch to something for themselves
   ("open Bambu", "show me the plate", "bring it forward"), use `open_app(target, front=True)` or

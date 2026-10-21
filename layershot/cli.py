@@ -78,7 +78,7 @@ def main(argv=None):
             activity.save_prefs(theme=a.theme)
         if a.off or a.on:
             activity.save_prefs(viewer="off" if a.off else "auto")
-        if a.quit:
+        if a.quit and activity.viewer_running():
             activity.save_prefs(quit=True)
         if not (a.off or a.on or a.quit or a.hotkey or a.theme):
             activity.save_prefs(viewer_hidden=False)

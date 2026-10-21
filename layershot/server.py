@@ -8,9 +8,7 @@ try:  # mcp >= 2
 except ImportError:  # mcp 1.x
     from mcp.server.fastmcp import FastMCP as _Server, Image
 
-from PIL import ImageDraw
-
-from . import activity, actions, core
+from . import activity, actions, core, theme
 from .rules import RULES
 
 # Clients that support server instructions (Claude Code, Claude Desktop, ...) put these in the model's
@@ -37,14 +35,9 @@ def _encode(img, max_width: int, fmt: str, hwnd: int | None = None) -> Image:
 
 
 def _draw_cursor(img, x: int, y: int):
-    """The AI's own cursor, drawn only on the AI's copy of the screenshot (never on the screen)."""
-    d = ImageDraw.Draw(img)
-    for r, col in ((11, (0, 0, 0)), (9, (255, 0, 200))):
-        d.ellipse((x - r, y - r, x + r, y + r), outline=col, width=3)
-    d.line((x - 16, y, x - 5, y), fill=(255, 0, 200), width=2)
-    d.line((x + 5, y, x + 16, y), fill=(255, 0, 200), width=2)
-    d.line((x, y - 16, x, y - 5), fill=(255, 0, 200), width=2)
-    d.line((x, y + 5, x, y + 16), fill=(255, 0, 200), width=2)
+    """The AI's own cursor (the theme's cursor image), drawn only on the AI's copy of the screenshot."""
+    cur, (hx, hy) = theme.cursor(height=32)
+    img.paste(cur, (x - hx, y - hy), cur)
 
 
 def _win(layer, title, process, hwnd) -> dict:
@@ -75,7 +68,8 @@ def screenshot_window(
     back of the stack and minimized again afterwards unless keep_open is true.
     max_width downsizes large windows (0 = full size); format is "png" or "jpeg".
     save_to also writes the full-size image to that path.
-    If you've clicked in this window, YOUR cursor is drawn as a magenta ring with a crosshair. Only you see it.
+    If you've clicked in this window, YOUR cursor is drawn on it (an arrow with a coloured glow; its tip is the point). The real
+    mouse never appears in these captures.
     x/y you pass to click/scroll are pixels of the image this returns.
     """
     img, win = core.capture(layer=layer, title=title, process=process, hwnd=hwnd,

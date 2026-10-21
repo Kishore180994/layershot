@@ -151,8 +151,19 @@ Tools:
 - `type_text(text, window, element=None, append=False, enter=False)`, `press_key(key, window)` and
   `scroll(window, x, y, amount)`.
 
-After a click, `screenshot_window` draws the AI's cursor as a magenta ring on the agent's copy, so it
-can see where it clicked. Your screen never shows it.
+After a click, `screenshot_window` draws the AI's cursor on the agent's copy, so it can see where it
+clicked. It's a normal arrow with a blue highlight, and the same cursor appears in the AI view.
+It never appears anywhere else on your screen.
+
+**Custom AI cursor:** point the theme at any RGBA PNG:
+
+```json
+{ "theme": { "base": "hud", "cursor_image": "C:/path/ai_cursor.png",
+             "cursor_hotspot": [6, 4], "cursor_height": 34 } }
+```
+
+(in `%LOCALAPPDATA%\layershot\prefs.json`; `cursor_hotspot` is the pixel of the PNG that marks the
+point). Without one, the cursor's highlight follows the theme: blue for `default`, cyan for `hud`.
 
 ### The AI view (floating window)
 
