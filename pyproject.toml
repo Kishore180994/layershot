@@ -5,12 +5,12 @@ build-backend = "hatchling.build"
 [project]
 name = "layershot"
 version = "0.3.3"
-description = "Screenshot any Windows app window - covered or minimized - without stealing focus. CLI + MCP server for AI agents."
+description = "Let AI agents see, open, click and type in Windows apps behind the one you are using - without taking over your screen. CLI + MCP server."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 dependencies = ["mcp>=1.2", "Pillow>=9", "comtypes>=1.2"]
-keywords = ["mcp", "screenshot", "windows", "claude", "agents", "computer-use"]
+keywords = ["mcp", "screenshot", "windows", "claude", "agents", "computer-use", "ui-automation", "background"]
 classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Programming Language :: Python :: 3",
