@@ -159,18 +159,20 @@ class Viewer:
             w.bind("<B1-Motion>", self._drag_move)
         tk.Frame(body, bg=T["border"], height=1).pack(fill="x")
 
-        self.view = tk.Frame(body, bg=T["bg"])
-        self.view.pack(fill="both", expand=True)
+        self.view = tk.Frame(body, bg=T["bg"])  # packed last, after the footer: it gets what's left
         self.placeholder = tk.Label(self.view, text=cap("Waiting for the AI") + " …", bg=T["bg"], fg=T["dim"],
                                     font=(T["font"], 8))
         self.placeholder.place(relx=0.5, rely=0.5, anchor="center")
         self.view.bind("<Double-Button-1>", lambda e: self.bring_forward())
+        self.view.bind("<Configure>", lambda e: self._place_thumb())  # re-fit whenever the area changes
 
-        tk.Frame(body, bg=T["border"], height=1).pack(fill="x")
         foot = tk.Frame(body, bg=T["bg"])
-        foot.pack(fill="x")
-        self.status = tk.Label(foot, text="", bg=T["bg"], fg=T["fg"], font=(T["mono"], 8), anchor="w",
-                               justify="left")
+        foot.pack(side="bottom", fill="x")
+        tk.Frame(body, bg=T["border"], height=1).pack(side="bottom", fill="x")
+        self.view.pack(fill="both", expand=True)
+        # fixed two-line footer: growing text must never push into the live view
+        self.status = tk.Label(foot, text="", bg=T["bg"], fg=T["fg"], font=(T["mono"], 8), anchor="nw",
+                               justify="left", height=2)
         self.status.pack(side="left", fill="x", expand=True, padx=self.px(8), pady=self.px(5))
         grip = tk.Canvas(foot, width=self.px(14), height=self.px(14), bg=T["bg"], highlightthickness=0,
                          cursor="size_nw_se")
@@ -298,6 +300,8 @@ class Viewer:
         self._place_thumb()
 
     def _place_thumb(self):
+        if not hasattr(self, "cur_hwnd"):
+            return  # <Configure> during start-up, before the cursor window exists
         if not self.thumb:
             self.placeholder.place(relx=0.5, rely=0.5, anchor="center")
             self.thumb_rect = None

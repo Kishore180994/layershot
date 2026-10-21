@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.3 - 2026-10-21
+
+- **Fix:** the live view could overlap the footer. The footer is laid out first at a fixed two-line height,
+  and the live picture re-fits whenever the view area changes size.
+
 ## 0.3.2 - 2026-10-21
 
 - **AI cursor redesign:** a normal arrow with a blue highlight (`hud` theme: cyan), drawn with real
