@@ -18,7 +18,7 @@ from .rules import BEGIN, END, block
 HOME = Path.home()
 APPDATA = Path(os.environ.get("APPDATA", HOME / "AppData/Roaming"))
 LOCALAPPDATA = Path(os.environ.get("LOCALAPPDATA", HOME / "AppData/Local"))
-REPO = "git+https://github.com/Kishore180994/layershot"
+REPO = "layershot"  # the PyPI package, for agents started through uvx
 
 
 def server_command() -> list[str]:

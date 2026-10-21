@@ -52,14 +52,16 @@ Requires Windows 10 1809+ and Python 3.10+.
 
 **The easy way: ask your agent.** Paste this into Claude Code, Codex or any agent with a shell:
 
-> Install layershot from https://github.com/Kishore180994/layershot and run `layershot setup`.
+> Install layershot (`pip install layershot`) and run `layershot setup`.
 
 **Or do it yourself. It takes two commands:**
 
 ```bash
-pip install git+https://github.com/Kishore180994/layershot
+pip install layershot
 layershot setup
 ```
+
+[![PyPI](https://img.shields.io/pypi/v/layershot)](https://pypi.org/project/layershot/)
 
 `layershot setup` finds the agents on your PC and configures each one:
 
@@ -78,16 +80,16 @@ everything back out, and `--dry-run` shows what would change. `--agents codex,cu
 Even without `setup`, the MCP server sends the same rule as its *server instructions*, which clients
 like Claude Code put into the model's prompt automatically.
 
-Manual install:
+Run it without installing, using [uv](https://docs.astral.sh/uv/):
+
+```bash
+uvx layershot list
+```
+
+Latest development version:
 
 ```bash
 pip install git+https://github.com/Kishore180994/layershot
-```
-
-Or run it without installing, using [uv](https://docs.astral.sh/uv/):
-
-```bash
-uvx --from git+https://github.com/Kishore180994/layershot layershot list
 ```
 
 From a clone:
@@ -103,7 +105,7 @@ git clone https://github.com/Kishore180994/layershot && cd layershot && pip inst
 ```bash
 claude mcp add --scope user layershot -- layershot-mcp
 # or without installing anything:
-claude mcp add --scope user layershot -- uvx --from git+https://github.com/Kishore180994/layershot layershot-mcp
+claude mcp add --scope user layershot -- uvx --from layershot layershot-mcp
 ```
 
 **Claude Desktop / Cursor / any MCP client** (`mcpServers` config):
