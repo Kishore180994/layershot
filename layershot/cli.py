@@ -42,6 +42,10 @@ def main(argv=None):
     ky = sub.add_parser("key", help="press a key in a background window (enter, tab, esc, ...)")
     ky.add_argument("target")
     ky.add_argument("key")
+    fl = sub.add_parser("flash", help="real input for apps that ignore background clicks: the window comes "
+                                      "forward for a moment, runs the steps, focus goes back")
+    fl.add_argument("target")
+    fl.add_argument("steps", help='JSON list, e.g. \'[{"click":[1690,50]},{"key":"ctrl+r"},{"wait":1}]\'')
     vw = sub.add_parser("viewer", help="the floating AI-view window (runs it; agents start it automatically)")
     vw.add_argument("--off", action="store_true", help="never start it automatically")
     vw.add_argument("--on", action="store_true", help="start it automatically again (default)")
@@ -85,6 +89,12 @@ def main(argv=None):
             from .viewer import main as run_viewer
             return run_viewer()
         print("viewer prefs:", activity.prefs())
+        return 0
+
+    if a.cmd == "flash":
+        from .flash import flash
+        t = int(a.target) if a.target.isdigit() else a.target
+        print(flash(t, steps=json.loads(a.steps)))
         return 0
 
     if a.cmd in ("elements", "click", "type", "key"):

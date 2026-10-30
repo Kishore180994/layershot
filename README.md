@@ -152,6 +152,11 @@ Tools:
   window messages at the AI's own invisible cursor.
 - `type_text(text, window, element=None, append=False, enter=False)`, `press_key(key, window)` and
   `scroll(window, x, y, amount)`.
+- `flash(window, steps)` is for apps that ignore background input. The window comes forward for a
+  second or two, the steps run as real mouse and keyboard input, then focus and the mouse go back to
+  you. Steps: `{"click": [x, y]}` (`"button": "right"`, `"double": true`), `{"key": "ctrl+r"}`
+  (`"repeat": n`), `{"type": "text"}`, `{"wait": 0.5}`, `{"shot": "out.png"}` (captures open menus
+  too). A popup menu closes when focus goes back, so open it and pick from it in one flash.
 
 After a click, `screenshot_window` draws the AI's cursor on the agent's copy, so it can see where it
 clicked. It's a normal arrow with a blue highlight, and the same cursor appears in the AI view.
@@ -188,11 +193,12 @@ cursor and its last actions.
 
 | App type | See | Click / type |
 |---|---|---|
-| Classic Win32 (dialogs, Character Map, most older apps, wxWidgets like Bambu Studio) | ✅ | ✅ by element and by x,y |
+| Classic Win32 (dialogs, Character Map, most older apps) | ✅ | ✅ by element and by x,y |
+| wxWidgets apps like Bambu Studio | ✅ | ✅ standard fields; custom-drawn buttons, sliders and right-click menus need `flash` |
 | Chrome / Edge / Electron (VS Code, Obsidian, Discord) | ✅ | ✅ by element (accessibility) |
-| WinUI / new Windows 11 apps (Notepad, Paint) | ✅ | ✅ by element and typing; ❌ x,y clicks and menus that need an active window |
+| WinUI / new Windows 11 apps (Notepad, Paint) | ✅ | ✅ by element and typing; x,y clicks and menus need `flash` |
+| Ctrl/Alt shortcuts | | `flash` (Windows reads modifiers from the real keyboard) |
 | Games, full-screen DirectX, 3D-view drags | ✅ (mostly) | ❌, so the agent asks you first |
-| Ctrl/Alt shortcuts | | ❌ (Windows reads modifiers from the real keyboard) |
 
 Titles match loosely: "Bambu Studio" finds `plate - BambuStudio` (`bambu-studio.exe`).
 
@@ -233,6 +239,7 @@ layershot elements <window> [--query text]
 layershot click <window> <e12 | x y> [--right] [--double]
 layershot type <window> "text" [--element e3] [--enter]
 layershot key <window> <enter|tab|esc|...>
+layershot flash <window> '[{"click":[x,y]},{"key":"ctrl+r"},{"wait":1}]'
 layershot viewer [--off | --on | --quit | --hotkey "ctrl+alt+l"]
 layershot serve            # MCP server on stdio (same as layershot-mcp)
 ```
@@ -247,8 +254,9 @@ layershot serve            # MCP server on stdio (same as layershot-mcp)
 - **Background opening:** an app that's *already open* and gets reused (a URL opening as a new
   tab in your existing browser, for example) stays where it is. If it still manages to activate
   itself, layershot hands focus back to you right away.
-- **Background input** can't do everything: see the table above. When an agent can't do something in
-  the background, the rule tells it to ask you before taking over the screen.
+- **Background input** can't do everything: see the table above. `flash` covers most of the rest by
+  borrowing the screen for a second or two. If you type during a flash, those keys can land in the
+  agent's window. For anything longer (drags, games), the rule tells the agent to ask you first.
 
 ## Development
 

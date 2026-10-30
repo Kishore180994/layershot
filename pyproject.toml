@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "layershot"
-version = "0.3.3"
+version = "0.3.4"
 description = "Let AI agents see, open, click and type in Windows apps behind the one you are using - without taking over your screen. CLI + MCP server."
 readme = "README.md"
 license = "MIT"

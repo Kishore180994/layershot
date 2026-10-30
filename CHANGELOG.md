@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.4 - 2026-10-30
+
+- **New: `flash`** (MCP tool and `layershot flash` CLI) for apps that ignore background input, such as
+  custom-drawn buttons, sliders, right-click menus and Ctrl/Alt shortcuts. The window comes forward for
+  a second or two, the steps (click, right/double click, key combos, typing, waits, screen-area shots
+  that include open menus) run as real input, then focus and the mouse go back to the user. Modifier
+  keys are always released afterwards.
+- Agent rule: use `flash` when a background click did nothing; longer takeovers still need the user's OK.
+- README: the app table no longer says Bambu Studio's custom buttons work in the background.
+
 ## 0.3.3 - 2026-10-21
 
 - **Fix:** the live view could overlap the footer. The footer is laid out first at a fixed two-line height,

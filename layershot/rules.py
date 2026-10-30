@@ -23,12 +23,17 @@ The user keeps working while you run. Use layershot to look at and open apps.
   real keystrokes (SendInput, pyautogui, etc.).
 - The user asked: only when the user asks to open, show or switch to something for themselves
   ("open Bambu", "show me the plate", "bring it forward"), use `open_app(target, front=True)` or
-  `bring_to_front(...)`. If something can't be done in the background (drags, games, apps that
-  ignore background input), ask the user before taking over the screen.
+  `bring_to_front(...)`.
+- Apps that ignore background input (custom-drawn buttons, sliders, right-click menus, Ctrl
+  shortcuts): when a screenshot shows a background click did nothing, use `flash(steps=[...])`. The
+  window comes forward for a second or two, the steps run as real input, then focus and the mouse go
+  back to the user. Batch the steps so it's one short flash, and open + pick a menu in the same flash.
+  Anything longer (drags, games, minutes of clicking) still needs the user's OK first.
 - Without the MCP tools, use the CLI: `layershot list`, `layershot shot "<title or layer>" -o shot.png`
   (then read the PNG), `layershot open <app> [args]` (background), `layershot open --front <app>`,
   `layershot front "<title>"`, `layershot elements "<title>"`, `layershot click "<title>" e12`
-  (or x y), `layershot type "<title>" "text" [--element e3] [--enter]`, `layershot key "<title>" enter`.
+  (or x y), `layershot type "<title>" "text" [--element e3] [--enter]`, `layershot key "<title>" enter`,
+  `layershot flash "<title>" '[{"click":[x,y]},{"key":"ctrl+r"}]'`.
 - The user can watch you in the floating layershot viewer (Ctrl+Alt+L shows/hides it).
 - A full-screen screenshot is OK only when the user asks what is on their screen.
 """

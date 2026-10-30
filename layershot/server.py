@@ -124,7 +124,7 @@ def press_key(key: str, layer: int | None = None, title: str | None = None, proc
               hwnd: int | None = None, element: str | None = None) -> dict:
     """Press one key in a background window: enter, tab, esc, backspace, delete, space, arrows,
     home/end, pageup/pagedown, f1-f12, or a single character. Shortcuts with Ctrl/Alt don't
-    work in the background (Windows reads modifier state from the real keyboard)."""
+    work in the background (Windows reads modifier state from the real keyboard): use flash."""
     return actions.press_key(**_win(layer, title, process, hwnd), key=key, element=element)
 
 
@@ -134,6 +134,21 @@ def scroll(layer: int | None = None, title: str | None = None, process: str | No
     """Scroll a background window at x, y (screenshot pixels; default = centre). amount in notches,
     negative = down."""
     return actions.scroll(**_win(layer, title, process, hwnd), x=x, y=y, amount=amount)
+
+
+@mcp.tool()
+def flash(steps: list[dict], layer: int | None = None, title: str | None = None, process: str | None = None,
+          hwnd: int | None = None) -> dict:
+    """For apps that IGNORE background input (custom-drawn buttons, sliders, right-click menus, Ctrl
+    shortcuts): brings the window to the front for a moment, runs the steps as real mouse/keyboard
+    input, then gives focus and the mouse back to the user. Try click/press_key first; use this when
+    a screenshot shows the background action did nothing. Keep each flash short.
+    steps, in order: {"click": [x, y]} (screenshot px; "button": "right", "double": true),
+    {"key": "ctrl+r"} or {"key": "down", "repeat": 22}, {"type": "text"}, {"wait": 0.5},
+    {"shot": "C:/path.png"} (captures the window's screen area incl. open menus).
+    Menus close when focus returns, so open and pick from a menu in the same flash."""
+    from .flash import flash as run
+    return run(**_win(layer, title, process, hwnd), steps=steps)
 
 
 @mcp.tool()
